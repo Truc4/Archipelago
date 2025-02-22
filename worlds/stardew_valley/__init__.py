@@ -22,6 +22,8 @@ from .rules import set_rules
 from .stardew_rule import True_, StardewRule, HasProgressionPercent
 from .strings.ap_names.event_names import Event
 from .strings.goal_names import Goal as GoalName
+from utils.bingo_generator import generate_bingo_board
+from utils.bingo_checker import check_bingo
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +95,8 @@ class StardewValleyWorld(World):
         super().__init__(multiworld, player)
         self.filler_item_pool_names = []
         self.total_progression_items = 0
+        self.bingo_card = []  # Initialize bingo_card attribute as an empty list
+        self.marked_positions = []
 
         # Taking the seed specified in slot data for UT, otherwise just generating the seed.
         self.seed = getattr(multiworld, "re_gen_passthrough", {}).get(STARDEW_VALLEY, self.random.getrandbits(64))
@@ -108,6 +112,19 @@ class StardewValleyWorld(World):
     def generate_early(self):
         force_change_options_if_incompatible(self.options, self.player, self.player_name)
         self.content = create_content(self.options)
+
+    def generate_bingo_card(self):
+        """
+        Generate a Bingo card for the player if the goal is Bingo.
+        """
+        location_checks = [location.name for location in self.multiworld.get_locations(self.player)]
+        if len(location_checks) < 25:
+            print(f"Not enough location checks to generate a Bingo board for player {self.player}.")
+            return
+
+        self.bingo_card = generate_bingo_board(self.multiworld, self.player)
+        self.marked_positions = []
+        print(f"Bingo card generated for player {self.player}: {self.bingo_card}")
 
     def create_regions(self):
         def create_region(name: str, exits: Iterable[str]) -> Region:
@@ -131,7 +148,12 @@ class StardewValleyWorld(World):
         create_locations(add_location, self.modified_bundles, self.options, self.content, self.random)
         self.multiworld.regions.extend(world_regions.values())
 
+        # Generate Bingo card after locations have been created
+        if self.options.goal == Goal.option_bingo:
+            self.generate_bingo_card()
+
     def create_items(self):
+        logger.debug("Creating items for Stardew Valley World")
         self.precollect_starting_season()
         self.precollect_farm_type_items()
         items_to_exclude = [excluded_items
@@ -155,6 +177,8 @@ class StardewValleyWorld(World):
         self.setup_logic_events()
         self.setup_victory()
 
+        logger.debug(f"Total progression items: {self.total_progression_items}")
+
         # This is really a best-effort to get the total progression items count. It is mostly used to spread grinds across spheres are push back locations that
         # only become available after months or years in game. In most cases, not having the exact count will not impact the logic.
         #
@@ -166,6 +190,8 @@ class StardewValleyWorld(World):
         self.total_progression_items += sum(1 for i in self.multiworld.get_filled_locations(self.player) if i.advancement)
         self.total_progression_items += sum(1 for i in created_items if i.advancement)
         self.total_progression_items -= 1  # -1 for the victory event
+
+        logger.debug(f"Final total progression items: {self.total_progression_items}")
 
     def precollect_starting_season(self):
         if self.options.season_randomization == SeasonRandomization.option_progressive:
@@ -292,7 +318,13 @@ class StardewValleyWorld(World):
         location.place_locked_item(StardewItem(item, ItemClassification.progression, None, self.player))
 
     def set_rules(self):
+        logger.debug("Setting rules for Stardew Valley World")
+        if self.options.goal == Goal.option_bingo:
+            total_locations = sum(len(row) for row in self.bingo_card)
+            if total_locations < 25:
+                raise ValueError(f"Not enough locations to generate a Bingo board for player {self.player}. Required: 25, Found: {total_locations}")
         set_rules(self)
+        logger.debug("Rules set successfully")
 
     def generate_basic(self):
         pass
@@ -383,6 +415,8 @@ class StardewValleyWorld(World):
 
     def collect(self, state: CollectionState, item: StardewItem) -> bool:
         change = super().collect(state, item)
+        if change and self.options.goal == Goal.option_bingo:
+            self.check_bingo(state)
         if not change:
             return False
 
@@ -401,6 +435,25 @@ class StardewValleyWorld(World):
             player_state[Event.received_walnuts] += walnut_amount
 
         return True
+
+    def check_bingo(self, state: CollectionState):
+        """
+        Check if the player has achieved a Bingo.
+        """
+        if not self.bingo_card:
+            return
+
+        for row in range(5):
+            for col in range(5):
+                location_name = self.bingo_card[row][col]
+                if state.has(location_name, self.player):
+                    if (row, col) not in self.marked_positions:
+                        self.marked_positions.append((row, col))
+                        print(f"Marked position {(row, col)} for player {self.player}")
+
+        if check_bingo(self.bingo_card, self.marked_positions):
+            print(f"Player {self.player} has achieved Bingo!")
+            self.multiworld.completion_condition[self.player] = lambda state: True
 
     def remove(self, state: CollectionState, item: StardewItem) -> bool:
         change = super().remove(state, item)

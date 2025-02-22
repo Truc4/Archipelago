@@ -22,6 +22,7 @@ from .mods.mod_data import ModNames
 from .options import StardewValleyOptions, Walnutsanity
 from .options import ToolProgression, BuildingProgression, ExcludeGingerIsland, SpecialOrderLocations, Museumsanity, BackpackProgression, Shipsanity, \
     Monstersanity, Chefsanity, Craftsanity, ArcadeMachineLocations, Cooksanity
+from .options import Goal  # Add this import
 from .stardew_rule import And, StardewRule, true_
 from .stardew_rule.indirect_connection import look_for_indirect_connection
 from .stardew_rule.rule_explain import explain
@@ -52,6 +53,7 @@ from .strings.tool_names import Tool, ToolMaterial
 from .strings.tv_channel_names import Channel
 from .strings.villager_names import NPC, ModNPC
 from .strings.wallet_item_names import Wallet
+from utils.bingo_checker import check_bingo  # Add this import
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +98,10 @@ def set_rules(world):
     set_deepwoods_rules(logic, multiworld, player, world_options)
     set_magic_spell_rules(logic, multiworld, player, world_options)
     set_sve_rules(logic, multiworld, player, world_options)
+
+    # Add rule for Bingo goal
+    if world_options.goal == Goal.option_bingo:
+        set_bingo_goal_rule(multiworld, player, world)
 
 
 def set_isolated_locations_rules(logic: StardewLogic, multiworld, player):
@@ -1023,3 +1029,16 @@ def set_many_island_entrances_rules(multiworld, player, entrance_rules: Dict[str
         return
     for entrance, rule in entrance_rules.items():
         set_entrance_rule(multiworld, player, entrance, rule)
+
+
+def set_bingo_goal_rule(multiworld, player, world):
+    def bingo_completion_condition(state):
+        result = check_bingo(world.bingo_card, world.marked_positions)
+        print(f"Bingo completion condition for player {player}: {result}")
+        return result
+
+    total_locations = sum(len(row) for row in world.bingo_card)
+    if total_locations < 25:
+        raise ValueError(f"Not enough locations to generate a Bingo board for player {player}. Required: 25, Found: {total_locations}")
+
+    multiworld.completion_condition[player] = bingo_completion_condition
