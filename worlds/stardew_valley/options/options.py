@@ -56,6 +56,7 @@ class Goal(Choice):
     # option_master_of_the_five_ways =
     option_allsanity = 24
     option_perfection = 25
+    option_bingo = 26
 
     @classmethod
     def get_option_name(cls, value) -> str:
