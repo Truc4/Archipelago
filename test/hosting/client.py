@@ -93,6 +93,18 @@ class Client:
         self.missing_locations = connect_result_msg["missing_locations"]
         self.checked_locations = connect_result_msg["checked_locations"]
 
+    def get_bingo_card(self) -> None:
+        if not self._ws:
+            raise ValueError("Not connected")
+        self._ws.send(json.dumps([{
+            "cmd": "GetBingoCard",
+        }]))
+        response = json.loads(self._ws.recv(self.recv_timeout))[0]
+        if "bingo_card" in response:
+            print(f"Bingo card for slot {self.slot}:")
+            for row in response["bingo_card"]:
+                print(" | ".join(row))
+
     def close(self) -> None:
         if self._ws:
             Thread(target=self._poll).start()

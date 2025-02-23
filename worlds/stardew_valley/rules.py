@@ -1044,3 +1044,6 @@ def set_bingo_goal_rule(multiworld, player, world):
         raise ValueError(f"Not enough locations to generate a Bingo board for player {player}. Required: 25, Found: {total_locations}")
 
     multiworld.completion_condition[player] = bingo_completion_condition
+
+def get_bingo_card(player, world):
+    return world.bingo_card
