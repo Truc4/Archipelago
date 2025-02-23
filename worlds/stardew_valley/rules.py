@@ -1033,9 +1033,11 @@ def set_many_island_entrances_rules(multiworld, player, entrance_rules: Dict[str
 
 def set_bingo_goal_rule(multiworld, player, world):
     def bingo_completion_condition(state):
-        result = check_bingo(world.bingo_card, world.marked_positions)
-        print(f"Bingo completion condition for player {player}: {result}")
-        return result
+        for row in world.bingo_card:
+            for location_name in row:
+                if not state.can_reach(location_name, resolution_hint='Location', player=player):
+                    return False
+        return True
 
     total_locations = sum(len(row) for row in world.bingo_card)
     if total_locations < 25:

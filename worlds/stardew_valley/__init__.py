@@ -318,13 +318,13 @@ class StardewValleyWorld(World):
         location.place_locked_item(StardewItem(item, ItemClassification.progression, None, self.player))
 
     def set_rules(self):
-        logger.debug("Setting rules for Stardew Valley World")
+        print("Setting rules for Stardew Valley World")
         if self.options.goal == Goal.option_bingo:
             total_locations = sum(len(row) for row in self.bingo_card)
             if total_locations < 25:
                 raise ValueError(f"Not enough locations to generate a Bingo board for player {self.player}. Required: 25, Found: {total_locations}")
         set_rules(self)
-        logger.debug("Rules set successfully")
+        print("Rules set successfully")
 
     def generate_basic(self):
         pass
@@ -453,7 +453,9 @@ class StardewValleyWorld(World):
 
         if check_bingo(self.bingo_card, self.marked_positions):
             print(f"Player {self.player} has achieved Bingo!")
-            self.multiworld.completion_condition[self.player] = lambda state: True
+            self.multiworld.completion_condition[self.player] = lambda state: all(
+                state.can_reach(location_name, self.player) for row in self.bingo_card for location_name in row
+            )
 
     def remove(self, state: CollectionState, item: StardewItem) -> bool:
         change = super().remove(state, item)
