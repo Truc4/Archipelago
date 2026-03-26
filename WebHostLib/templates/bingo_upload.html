@@ -1,0 +1,311 @@
+{% extends "pageWrapper.html" %}
+
+{% block head %}
+<title>Upload Bingo Board - {{ seed_name }}</title>
+<style>
+    body {
+        background-color: #1a1a2e;
+        color: #eee;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .upload-container {
+        max-width: 800px;
+        margin: 50px auto;
+        padding: 40px;
+        background: #16213e;
+        border: 2px solid #4ecca3;
+        border-radius: 15px;
+    }
+
+    .upload-container h1 {
+        color: #4ecca3;
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
+    .upload-info {
+        background: #0f172a;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 30px;
+    }
+
+    .upload-info p {
+        margin: 10px 0;
+        line-height: 1.6;
+    }
+
+    .upload-form {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .file-input-wrapper {
+        position: relative;
+        display: inline-block;
+        width: 100%;
+    }
+
+    .file-input-wrapper input[type="file"] {
+        position: absolute;
+        opacity: 0;
+        width: 100%;
+        height: 100%;
+        cursor: pointer;
+    }
+
+    .file-input-label {
+        display: block;
+        padding: 40px;
+        background: #0f172a;
+        border: 3px dashed #4ecca3;
+        border-radius: 10px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+
+    .file-input-label:hover {
+        background: #1a2332;
+        border-color: #45b393;
+    }
+
+    .file-input-label.has-file {
+        border-style: solid;
+        background: #2a4a3f;
+    }
+
+    .file-name {
+        margin-top: 15px;
+        color: #4ecca3;
+        font-weight: bold;
+    }
+
+    .submit-button {
+        background: #4ecca3;
+        color: #000;
+        padding: 15px 30px;
+        border: none;
+        border-radius: 8px;
+        font-size: 1.1em;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background 0.3s;
+    }
+
+    .submit-button:hover {
+        background: #45b393;
+    }
+
+    .submit-button:disabled {
+        background: #666;
+        cursor: not-allowed;
+    }
+
+    .back-link {
+        text-align: center;
+        margin-top: 20px;
+    }
+
+    .back-link a {
+        color: #4ecca3;
+        text-decoration: none;
+    }
+
+    .back-link a:hover {
+        text-decoration: underline;
+    }
+
+    .error-message {
+        background: #4a1616;
+        border: 2px solid #ff6b6b;
+        padding: 15px;
+        border-radius: 8px;
+        color: #ff6b6b;
+        margin-bottom: 20px;
+        display: none;
+    }
+
+    .success-message {
+        background: #1a4a3a;
+        border: 2px solid #4ecca3;
+        padding: 15px;
+        border-radius: 8px;
+        color: #4ecca3;
+        margin-bottom: 20px;
+        display: none;
+    }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="upload-container">
+    <h1>📤 Upload Bingo Board</h1>
+
+    <div class="upload-info">
+        <p><strong>Seed:</strong> {{ seed_name }}</p>
+        <p><strong>Tracker ID:</strong> {{ tracker }}</p>
+        <hr style="border-color: #333; margin: 15px 0;">
+        <p>Upload the bingo board JSON file for this tracker session.</p>
+        <p>The file should be named something like: <code>AP_&lt;seed&gt;_Bingo_&lt;difficulty&gt;.json</code></p>
+    </div>
+
+    <div id="error-message" class="error-message"></div>
+    <div id="success-message" class="success-message"></div>
+
+    <form id="upload-form" class="upload-form">
+        <div class="file-input-wrapper">
+            <input type="file" id="bingo-file" name="bingo_file" accept=".json" required>
+            <label for="bingo-file" class="file-input-label" id="file-label">
+                <div style="font-size: 3em; margin-bottom: 10px;">📁</div>
+                <div>Click to select a bingo board JSON file</div>
+                <div style="font-size: 0.9em; color: #aaa; margin-top: 10px;">or drag and drop</div>
+                <div class="file-name" id="file-name" style="display: none;"></div>
+            </label>
+        </div>
+
+        <button type="submit" class="submit-button" id="submit-button" disabled>
+            Upload Bingo Board
+        </button>
+    </form>
+
+    <div class="back-link">
+        <a href="{{ url_for('bingo_tracker_view', tracker=tracker) }}">← Back to Bingo Tracker</a>
+    </div>
+</div>
+
+<script>
+    const TRACKER_ID = "{{ tracker | suuid }}";
+    const fileInput = document.getElementById('bingo-file');
+    const fileLabel = document.getElementById('file-label');
+    const fileName = document.getElementById('file-name');
+    const submitButton = document.getElementById('submit-button');
+    const uploadForm = document.getElementById('upload-form');
+    const errorMessage = document.getElementById('error-message');
+    const successMessage = document.getElementById('success-message');
+
+    // File selection handling
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            fileName.textContent = file.name;
+            fileName.style.display = 'block';
+            fileLabel.classList.add('has-file');
+            submitButton.disabled = false;
+
+            // Validate JSON
+            validateJSON(file);
+        }
+    });
+
+    // Drag and drop handling
+    fileLabel.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        fileLabel.style.borderColor = '#45b393';
+    });
+
+    fileLabel.addEventListener('dragleave', () => {
+        fileLabel.style.borderColor = '#4ecca3';
+    });
+
+    fileLabel.addEventListener('drop', (e) => {
+        e.preventDefault();
+        fileLabel.style.borderColor = '#4ecca3';
+
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            fileInput.files = files;
+            fileInput.dispatchEvent(new Event('change'));
+        }
+    });
+
+    // Form submission
+    uploadForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const file = fileInput.files[0];
+        if (!file) {
+            showError('Please select a file');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('bingo_file', file);
+
+        submitButton.disabled = true;
+        submitButton.textContent = 'Uploading...';
+
+        try {
+            const response = await fetch(`/api/bingo/${TRACKER_ID}/upload`, {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                showSuccess(`Bingo board uploaded successfully! Difficulty: ${result.difficulty}`);
+                setTimeout(() => {
+                    window.location.href = `/bingo/${TRACKER_ID}`;
+                }, 2000);
+            } else {
+                showError(result.description || 'Upload failed');
+                submitButton.disabled = false;
+                submitButton.textContent = 'Upload Bingo Board';
+            }
+        } catch (error) {
+            showError(`Error uploading file: ${error.message}`);
+            submitButton.disabled = false;
+            submitButton.textContent = 'Upload Bingo Board';
+        }
+    });
+
+    async function validateJSON(file) {
+        try {
+            const text = await file.text();
+            const data = JSON.parse(text);
+
+            // Basic validation
+            if (!data.board || !Array.isArray(data.board) || data.board.length !== 5) {
+                showError('Invalid bingo board format: must have a 5x5 board');
+                submitButton.disabled = true;
+                return false;
+            }
+
+            for (const row of data.board) {
+                if (!Array.isArray(row) || row.length !== 5) {
+                    showError('Invalid bingo board format: each row must have 5 tiles');
+                    submitButton.disabled = true;
+                    return false;
+                }
+            }
+
+            // Valid!
+            hideError();
+            return true;
+        } catch (error) {
+            showError(`Invalid JSON file: ${error.message}`);
+            submitButton.disabled = true;
+            return false;
+        }
+    }
+
+    function showError(message) {
+        errorMessage.textContent = message;
+        errorMessage.style.display = 'block';
+        successMessage.style.display = 'none';
+    }
+
+    function hideError() {
+        errorMessage.style.display = 'none';
+    }
+
+    function showSuccess(message) {
+        successMessage.textContent = message;
+        successMessage.style.display = 'block';
+        errorMessage.style.display = 'none';
+    }
+</script>
+{% endblock %}
